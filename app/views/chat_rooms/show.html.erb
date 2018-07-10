@@ -1,0 +1,36 @@
+<%= current_user.email %>
+<h3>현재 이 방에 참여한 사람</h3>
+<div class="joined_user_list">
+<% @chat_room.users.each do |user| %>
+    <p><%= user.email %></p>
+<% end %>
+<hr>
+</div>
+
+<!-- remote: true를 통해서 a태그도 ajax로 요청이 가게 할 수 있다. -->
+<% unless @chat_room.admissions.where(user_id: current_user.id).exists? %>
+<%= link_to 'join', join_chat_room_path(@chat_room), method: 'post', remote: true, class: "join_room" %> |
+<% end %>
+<%= link_to 'Edit', edit_chat_room_path(@chat_room) %> |
+<%= link_to 'Back', chat_rooms_path %>
+
+
+<script>
+    $(document).on('ready', function(){
+        
+        function user_joined(data){
+            $('.joined_user_list').append(`<p>${data.email}</p>`);
+        }
+        
+        var pusher = new Pusher("<%= ENV["pusher_key"] %>", {
+          cluster: "<%= ENV["pusher_cluster"] %>",
+          encrypted: true
+        });
+        
+        var channel = pusher.subscribe('chat_room');
+        channel.bind('join', function(data) {
+            user_joined(data);
+        });
+    });
+    
+</script>
