@@ -1,7 +1,7 @@
 <% if user_signed_in? %>
   <% current_user.email %> / <%= link_to 'log out', destroy_user_session_path, method: 'delete' %>
 <% else %>
-<%= link_to 'log in' , new_user_session_path %>
+<%= link_to 'log in', new_user_session_path %>
 <% end %>
 
 <h1>Chat Rooms</h1>
@@ -18,11 +18,15 @@
 
   <tbody class="chat_room_list">
     <% @chat_rooms.reverse.each do |chat_room| %>
-      <tr>
-        <td><%= chat_room.title %></td>
-        <td><span class="current<%= chat_room.id %>"><%= chat_room.admissions.size %></span> / <%= chat_room.max_count %></td>
+      <tr class="row_<%= chat_room.id %>">
+        <td class="<%= chat_room.id %>_room_title"><%= chat_room.title %></td>
+        <td><span class="current<%= chat_room.id %>"><%= chat_room.admissions.size %></span> / <span class="current<%= chat_room.id %>_max"><%= chat_room.max_count %></span></td>
         <td><%= chat_room.master_id %></td>
         <td><%= link_to 'Show', chat_room %></td>
+        <% if user_signed_in? and chat_room.master_id.eql?(current_user.email) %>
+          <td><%= link_to 'Edit', edit_chat_room_path(chat_room) %></td>  
+          <td><%= link_to 'Destroy', "/chat_rooms/#{chat_room.id}", method: 'delete', remote: true %></td>
+        <% end %>
       </tr>
     <% end %>
   </tbody>
@@ -53,6 +57,20 @@
       current.text(parseInt(current.text()) + 1);
     }
     
+    function room_updated(data){
+      $(`.${data.id}_room_title`).text(data.title);
+      $(`.current${data.id}_max`).text(data.max_count);
+    }
+    
+    function user_exited(data){
+      var current = $(`.current${data.chat_room_id}`);
+      current.text(parseInt(current.text()) - 1);
+    }
+    function room_destroyed(data){
+      $(`.row_${data.id}`)[0].remove();
+      //location.reload();
+    }
+    
     var pusher = new Pusher("<%= ENV["pusher_key"] %>", {
       cluster: "<%= ENV["pusher_cluster"] %>",
       encrypted: true
@@ -68,6 +86,18 @@
     channel.bind('join', function(data) {
       //console.log(data);
       user_joined(data);
+    });
+    
+    channel.bind('update', function(data){
+      room_updated(data);
+    });
+    
+    channel.bind('exit', function(data){
+      user_exited(data);
+    });
+    
+    channel.bind('destroy', function(data) {
+      room_destroyed(data);
     });
   });
   

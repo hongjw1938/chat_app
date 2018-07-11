@@ -2,14 +2,33 @@
 <h3>현재 이 방에 참여한 사람</h3>
 <div class="joined_user_list">
 <% @chat_room.users.each do |user| %>
-    <p><%= user.email %></p>
+    <p class="user-<%= user.id %>"><%= user.email %>
+        <% if user.email.eql?(@chat_room.master_id) %>
+            <span> : 방장</span>
+        <% end %>
+    </p>
+<% end %>
+
+</div>
+<hr>
+<% if current_user.joined_room?(@chat_room) %>
+<div class="chat_list">
+    <% @chat_room.chats.each do |chat| %>
+        <p><%= chat.user.email %>: <%= chat.message %><small><%= chat.created_at %></small></p>
+    <% end %>
+</div>
+<%= form_tag("/chat_rooms/#{@chat_room.id}/chat", remote: true) do %>
+    <%= text_field_tag :message %>
 <% end %>
 <hr>
-</div>
+<% end %>
 
+<hr>
 <!-- remote: true를 통해서 a태그도 ajax로 요청이 가게 할 수 있다. -->
-<% unless @chat_room.admissions.where(user_id: current_user.id).exists? %>
+<% unless current_user.joined_room?(@chat_room) %>
 <%= link_to 'join', join_chat_room_path(@chat_room), method: 'post', remote: true, class: "join_room" %> |
+<% else %>
+<%= link_to 'Exit', exit_chat_room_path(@chat_room), method: 'delete', remote: true, data: {confirm: "이 방을 나가시겠습니까?"}%>
 <% end %>
 <%= link_to 'Edit', edit_chat_room_path(@chat_room) %> |
 <%= link_to 'Back', chat_rooms_path %>
@@ -19,7 +38,21 @@
     $(document).on('ready', function(){
         
         function user_joined(data){
-            $('.joined_user_list').append(`<p>${data.email}</p>`);
+            $('.joined_user_list').append(`<p class="user-${data.user_id}">${data.email}</p>`);
+            $('.chat_list').append(`<p>${data.email}님께서 입장하셨습니다.</p>`);
+        }
+        
+        function user_chat(data){
+            $('.chat_list').append(`<p>${data.email}: ${data.message}<small>(${data.created_at})</p>`);
+        }
+        
+        function user_exit(data){
+            $(`.user-${data.user_id}`).remove();
+            $('.chat_list').append(`<p>${data.email}님께서 퇴장하셨습니다.</p>`);
+        }
+        function room_destroyed(data) {
+            alert("방이 삭제되었습니다. 목록으로 이동합니다.");
+            location.href="/";
         }
         
         var pusher = new Pusher("<%= ENV["pusher_key"] %>", {
@@ -27,9 +60,21 @@
           encrypted: true
         });
         
-        var channel = pusher.subscribe('chat_room');
+        var channel = pusher.subscribe('chat_room_<%= @chat_room.id %>');
         channel.bind('join', function(data) {
+            //console.log(data);
             user_joined(data);
+        });
+        
+        channel.bind('chat', function(data){
+            user_chat(data);
+        });
+        channel.bind('exit', function(data){
+            
+            user_exit(data);
+        });
+        channel.bind('destroy', function(data) {
+          room_destroyed(data)
         });
     });
     
